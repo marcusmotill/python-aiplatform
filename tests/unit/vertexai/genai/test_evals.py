@@ -189,6 +189,54 @@ class TestEvals:
         assert "agent_info" in kwargs
         assert kwargs["agent_info"] == agent_info
 
+    def test_evaluate_predefined_metric_with_autorater_config(self):
+        dataset = vertexai_genai_types.EvaluationDataset(
+            eval_dataset_df=pd.DataFrame([{"prompt": "p1", "response": "r1"}])
+        )
+        generation_config = genai_types.GenerationConfig(
+            temperature=0.1,
+            max_output_tokens=1024,
+        )
+        metrics = [
+            vertexai_genai_types.RubricMetric.GENERAL_QUALITY(
+                judge_model_generation_config=generation_config
+            )
+        ]
+
+        mock_prebuilt_metric = vertexai_genai_types.LLMMetric(
+            name="general_quality_v1",
+            prompt_template="Is this quality? {response}",
+        )
+        mock_prebuilt_metric._is_predefined = True
+        mock_prebuilt_metric._config_source = (
+            "gs://mock-metrics/general_quality/v1.yaml"
+        )
+        mock_prebuilt_metric._version = "v1"
+
+        with mock.patch(
+            "vertexai._genai._evals_metric_loaders.LazyLoadedPrebuiltMetric._fetch_and_parse",
+            return_value=mock_prebuilt_metric,
+        ), mock.patch(
+            "vertexai._genai.evals.Evals._evaluate_instances"
+        ) as mock_evaluate_instances, mock.patch(
+            "vertexai._genai._evals_metric_handlers._evals_constant.SUPPORTED_PREDEFINED_METRICS",
+            frozenset(["general_quality_v1"]),
+        ):
+            mock_evaluate_instances.return_value = (
+                vertexai_genai_types.EvaluateInstancesResponse(
+                    metric_results=[vertexai_genai_types.MetricResult(score=0.9)]
+                )
+            )
+            self.client.evals.evaluate(
+                dataset=dataset,
+                metrics=metrics,
+            )
+
+            mock_evaluate_instances.assert_called_once()
+            _, kwargs = mock_evaluate_instances.call_args
+            assert "autorater_config" in kwargs
+            assert kwargs["autorater_config"].generation_config == generation_config
+
 
 class TestEvalsVisualization:
     @mock.patch(
