@@ -137,20 +137,20 @@ def is_version_sufficient(version_to_check: str) -> bool:
 
 class _ArtifactVersion:
     def __init__(self, **kwargs):
-        from google.genai import types
-
         self.version: Optional[str] = kwargs.get("version")
-        data = kwargs.get("data")
-        self.data: Optional[types.Part] = (
-            types.Part.model_validate(data) if isinstance(data, dict) else data
-        )
+        self.data = kwargs.get("data")
 
     def dump(self) -> Dict[str, Any]:
         result = {}
         if self.version:
             result["version"] = self.version
         if self.data:
-            result["data"] = self.data
+            if hasattr(self.data, "model_dump"):
+                result["data"] = self.data.model_dump(mode="json")
+            elif hasattr(self.data, "to_dict"):
+                result["data"] = self.data.to_dict()
+            else:
+                result["data"] = self.data
         return result
 
 
@@ -580,12 +580,18 @@ class AdkApp:
                     artifact.versions, key=lambda x: x["version"]
                 ):
                     version_data = _ArtifactVersion(**version_data)
+                    from google.genai import types
+
+                    artifact_data = version_data.data
+                    if isinstance(artifact_data, dict):
+                        artifact_data = types.Part.model_validate(artifact_data)
+
                     saved_version = await artifact_service.save_artifact(
                         app_name=self._tmpl_attrs.get("app_name"),
                         user_id=request.user_id,
                         session_id=session.id,
                         filename=artifact.file_name,
-                        artifact=version_data.data,
+                        artifact=artifact_data,
                     )
                     if saved_version != version_data.version:
                         from google.cloud.aiplatform import base
