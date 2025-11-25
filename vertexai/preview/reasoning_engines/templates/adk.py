@@ -137,9 +137,9 @@ def is_version_sufficient(version_to_check: str) -> bool:
 
 class _ArtifactVersion:
     def __init__(self, **kwargs):
+        self.version: Optional[str] = kwargs.get("version")
         from google.genai import types
 
-        self.version: Optional[str] = kwargs.get("version")
         data = kwargs.get("data")
         self.data: Optional[types.Part] = (
             types.Part.model_validate(data) if isinstance(data, dict) else data
@@ -580,6 +580,7 @@ class AdkApp:
                     artifact.versions, key=lambda x: x["version"]
                 ):
                     version_data = _ArtifactVersion(**version_data)
+
                     saved_version = await artifact_service.save_artifact(
                         app_name=self._tmpl_attrs.get("app_name"),
                         user_id=request.user_id,
